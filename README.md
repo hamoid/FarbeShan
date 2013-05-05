@@ -1,8 +1,11 @@
 FarbeShan
 =========
 
-Processing Code Jam
-Berlin, 04.05.2013
+Processing Code Jam - Berlin, 04.05.2013
+
+http://www.meetup.com/opentechschool-berlin/events/114338982/
+
+The event topics were: the color of sound, time, grasshoppers
 
 By Chi and aBe
 
