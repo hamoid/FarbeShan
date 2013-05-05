@@ -1,70 +1,57 @@
+// Farbe_Shan - SuperCollider code
+// https://github.com/hamoid/FarbeShan
 
-n = NetAddr("127.0.0.1", NetAddr.langPort); // the url should be the one of computer of app 2 (or nil)
-n = NetAddr("127.0.0.1", 57120); // the url should be the one of computer of app 2 (or nil)
+// Works together with the FarbeShan Processing code
+// to generate sound based on curves the user draws
+// on top of a playing video.
 
-101%5
+// This is currently a proof of concept and has not yet
+// been tweaked to be good for live performing or produce
+// good sounds. It should be modified to make sounds be
+// more unique depending on hue or brightness.
 
+// the url should be the one of computer of app 2 (or nil)
+n = NetAddr("127.0.0.1", NetAddr.langPort);
 
 (
+// hue, sat, bri and alpha are scaled down
 o = OSCresponder(nil, '/FS', { |t, r, msg|
-	var h, s, b, line;
-	//msg.postln;
-	~id = msg[1]%4;
-	~hue = msg[2];
-	~sat = msg[3];
-	~bri = msg[4];
-	~decayOrg = msg[5];
-	~decay = ~decayOrg.linlin(0,255,0.0,1.0);
-
-	x = case
-	{~id == 0} {
-		//"val 0".postln;
-		if(~hue > 0, {~s0 = Synth("don", [\freq, ~hue.linlin(0,255,30,42).midicps, \amp, ~decay]);});
-	}
-	{~id == 1} {
-		//"val 1".postln;
-		if(~hue > 50, {~s1 = Synth("highh", [\pitch, ~hue.linlin(50,255,0.6,0.8), \amp, ~decay]);});
-	}
-
-	{~id == 2} {
-		//"val 2".postln;
-		if(~hue > 0, {~s2 = Synth("telep", [\a, ~hue.linlin(0,255,800,1000), \amp, ~decay])});
-	}
-	{~id == 3} {
-		//"val 3".postln;
-		if(~hue > 50, {~s3 = Synth("playBuf", [\rate, ~hue.linlin(50,255,0.8,1.4).round(0.1), \amp, ~decay])});
-	}
-	{~id == 4} {
-		//"val 4".postln;
-	}
-	{~id == 5} {
-		//"val 5".postln;
-	}
-	{~id == 6} {
-		//"val 6".postln;
-	}
-	{~id == 7} {
-		//"val 7".postln;
-	};
-
-
-
+    Synth("FarbeShan", [
+        \id, msg[1],
+        \hue, msg[2].linlin(0, 255, 0.0, 1.0),
+        \sat, msg[3].linlin(0, 255, 0.0, 1.0),
+        \bri, msg[4].linlin(0, 255, 0.0, 1.0),
+        \alpha, msg[5].linlin(0, 255, 0.0, 1.0)
+    ]);
 }).add;
 )
-
 o.free;
 
 (
-~f1 = Buffer.read(s, "/Users/LL/Music/sounds/1/cSharp1.wav", bufnum:11);
-//
-SynthDef("klankie", { |pitch=1, amp=1|  var source, kl ;
-	kl=[800, 1071, 1153, 2023] ;
-	source = Klank.ar(`[(kl*1.5), 0.3, [0.5, 1, 2, 0.5]*0.3],
-		SinOsc.ar(pitch*400, mul: XLine.ar(0.35, 0.000001, 2)));
-	Out.ar([0,1], source*amp);
-	DetectSilence.ar(source, doneAction:2);
+// Test sound that accepts all parameters coming from Processing
+// id currently unused. It indicates the curve id, which can be
+// between 0 and MAX_CURVES, and can be used to play different sounds
+// depending on id.
+SynthDef("FarbeShan", { | out=0, id=0, hue=0, sat=0, bri=0, alpha=0|
+    var frq;
+    // The pitch depends on the hue
+    frq = (50 + (hue * 48)).floor.midicps;
+    Out.ar(out,
+         SinOsc.ar(
+            // Saturation increases pitch offset between left and right speaker
+            frq + [sat * 5, sat * -5],
+            // Brightness and alpha both control the volume
+            // Alpha goes down when particles disappear at the end of the curve life
+            mul:bri * alpha * Linen.kr(Impulse.kr(0), 0.05, 0.1, 1.1, doneAction:2)))
 }).add;
+)
 
+// Play the test sound
+Synth("FarbeShan", [\hue, 0.5, \alpha, 1, \bri, 0.5]);
+
+
+// Other available synths
+(
 SynthDef("telep", { | out=0, a=1000, amp=0|
 			var source;
 			source = LFPulse.ar(7, mul:200, add: a)*amp;
@@ -94,30 +81,3 @@ SynthDef(\playBuf,{ |bufnum=11,lo=0, amp=0.9, rate=2|
 	FreeSelfWhenDone.kr(out);
 }).add;
 )
-
-(
-~seq1 = Pseq([1,1.5,2,1,1],inf).asStream;
-
-~s1 = Synth("klankie", [\pitch, 1]);
-~s2 = Synth("telep", [\a, 900]);
-
-)
-
-//////Tdef///////
-(
-Tdef( 'klankT' , {
-	var y = Pseq([1,1.5,2,1,1],inf).asStream;
-	//var x = Prand([1,1,1,1.5,0.5,2,1],6).asStream;
-	2.do { |i|
-		(	'instrument': 'klankie',
-			'pitch': ~hue/100,
-
-		).play;
-		0.16.wait;
-	};
-}).play;
-)
-
-1/6
-38/255
-Pdef

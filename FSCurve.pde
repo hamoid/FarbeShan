@@ -2,40 +2,42 @@ class FSCurve {
   int MAX_POINTS = 100;
 
   PVector[] points = new PVector[MAX_POINTS];
+  PVector lastPlayedPoint;
+  
   int lastPointId = 0;
-  int born;
-  int maxAge;
+  int bornMs;
+  int maxAgeMs;
   int currStep;
   int totalStep;
   float decay = 1;
   float rate;
 
-
   FSCurve() {
   }
+  
   void init() {
-    this.born = millis();
-    this.maxAge = int(this.born + 1000.0 * random(4, 15));
+    this.bornMs = millis();
+    this.maxAgeMs = int(this.bornMs + 1000.0 * random(4, 15));
     this.addPoint();
     this.currStep = 0;
     this.totalStep = int (random(3, 8));
+    this.decay = 1;
     this.rate = random(30, 60);
+    lastPlayedPoint = new PVector(-10, -10);
   }
 
-  color getCurrColor() {
+  public color getCurrColor() {
     if (this.lastPointId > 0) {
       float pc = float(this.currStep) / float(this.totalStep);
-      PVector chosen = points[int(pc * lastPointId)];
-      int x = int (chosen.x);
-      int y = int (chosen.y);      
+      lastPlayedPoint = points[int(pc * lastPointId)];
       this.currStep = (this.currStep + 1) % this.totalStep;
-      return getPixelColor(x, y);
+      return getPixelColor((int)lastPlayedPoint.x, (int)lastPlayedPoint.y);
     } 
     else {
       return color(0, 0);
     }
   }
-  color getPixelColor(int x, int y) {
+  private color getPixelColor(int x, int y) {
     x = constrain(x, 0, width-1);
     y = constrain(y, 0, height-1);
     int p = x+y*width;
@@ -43,7 +45,7 @@ class FSCurve {
     return color(red(c), green(c), blue(c), 255 * this.decay);
   }
 
-  void doAddPoint() {
+  private void doAddPoint() {
     this.points[this.lastPointId] = new PVector(mouseX, mouseY);
     this.lastPointId++;
   }
@@ -65,7 +67,7 @@ class FSCurve {
   }
   void draw() {
     if (this.lastPointId > 0 && mov.pixels.length > 0) {
-      float baseRad = 2 + (millis() - this.born) / 1000.0;
+      float baseRad = 2 + (millis() - this.bornMs) / 1000.0;
       for (int i=0; i<this.lastPointId; i++) {
         float radius = 4 * i/this.lastPointId + baseRad;
         for (int j=0; j<10; j++) {
@@ -75,12 +77,14 @@ class FSCurve {
           ellipse(x, y, radius, radius);
         }
       }
-      if (millis() > this.maxAge) {
+      if (millis() > this.maxAgeMs) {
         this.decay -= 0.01;
         if (this.decay < 0) {
           this.lastPointId = 0;
         }
       }
+      fill(255, 100);
+      ellipse(lastPlayedPoint.x, lastPlayedPoint.y, 20, 20);
     }
   }
 }

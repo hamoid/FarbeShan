@@ -1,69 +1,106 @@
+// Farbe_Shan - Processing code
+// https://github.com/hamoid/FarbeShan
+
+// Works together with the FarbeShan SuperCollider code
+// to generate sound based on curves the user draws
+// on top of a playing video.
+
+// This main program creates an array of blank curves.
+// When the user clicks and drags, curves are drawn.
+// Curves have a lifespan. After a while, they disappear
+// While they exist, they change and they send data
+// via OSC to SuperCollider, which plays sounds for those
+// curves, depending on the characteristics of the pixels
+// in the video under the curve.
+
+// NOTE: In Ubuntu, if using Jack, the loaded video should not
+// contain sound. Otherwise the video will be paused.
+// You can strip audio using ffmpeg:
+// ffmpeg -i source.mp4 -an out.mp4
+
+// Missing: a way to control the video. Maybe it's better to
+// stay at one frame (to play it for a while) and then be
+// able to jump to next or previous frames.
+
 import oscP5.*;
 import netP5.*;
 import processing.video.*;
-Movie mov;
-int x;
-int lastMove = 0; 
-float videoPos;
+
+String DEFAULT_MOVIE_PATH = "/home/funpro/Desktop/o2.mp4";
+
 int MAX_CURVES = 50;
-int lastCurve = 0;
-int tickMs = 125;
-int lastTick = -1;
-FSCurve[] myCurve = new FSCurve[MAX_CURVES];
-OscP5 oscP5;
-NetAddress toSendto;
-NetAddress toReceive;
-float fadeOutState = 1;
-boolean fadeOut = false;
+FSCurve[] curves = new FSCurve[MAX_CURVES];
+
+int nextCurveID = 0;
+int metronomeMs = 125;
+int metronomeTickCount = -1;
+
+Movie mov;
+
+OscP5 osc;
+NetAddress scLangAddr;
+
+float fadeOutOpacity = 1;
+boolean fadeOutActive = false;
 
 void setup() {
-  oscP5 = new OscP5(this, 8888);
-  toSendto = new NetAddress("127.0.0.1", 57120); //send to sclang
   size(640, 360);
   background(0);
   frameRate(30);
-  text("LOADING... ", width-150, height-150);
-  mov = new Movie(this, "/home/funpro/Desktop/rh/episode 3/rh.avi");
-  mov.frameRate(3);
-  mov.loop();
   noStroke();
+  
+  osc = new OscP5(this, 8888);
+  scLangAddr = new NetAddress("127.0.0.1", 57120);
+  
+  text("LOADING... ", width-150, height-150);
+  
+  selectInput("Select a movie to play", "loadMovie");
+    
   for (int i=0; i<MAX_CURVES; i++) {
-    myCurve[i] = new FSCurve();
+    curves[i] = new FSCurve();
   }
+}
+void loadMovie(File path) {
+  if(path == null) {
+    mov = new Movie(this, DEFAULT_MOVIE_PATH);
+  } else {
+    mov = new Movie(this, path.getAbsolutePath());
+  }
+  mov.loop();
+  mov.speed(0.05);
+  mov.volume(0);
 }
 void draw() {
-  mov.loadPixels();
-  if (mov.pixels.length > 0) {
-    drawBackground1();
-  }
-  for (int i=0; i<MAX_CURVES; i++) {
-    myCurve[i].draw();
-  }
-  if (int(millis() / tickMs) != lastTick) {
-    lastTick = millis() / tickMs;
-    sendData();
-  }
-  if(fadeOut) {
-    fadeOutState -= 0.01;
+  if(mov != null) {
+    mov.loadPixels();
+      drawBackground3();
+    for (int i=0; i<MAX_CURVES; i++) {
+      curves[i].draw();
+    }
+    if (int(millis() / metronomeMs) != metronomeTickCount) {
+      metronomeTickCount = millis() / metronomeMs;
+      talkToSC();
+    }
+    if(fadeOutActive) {
+      fadeOutOpacity -= 0.01;
+    }
   }
 }
-
 void movieEvent(Movie mv) {
   mov.read();
 }
-
 void mousePressed() {
-  myCurve[lastCurve].init();
+  curves[nextCurveID].init();
 }
 void mouseReleased() {
-  lastCurve = (lastCurve + 1) % MAX_CURVES;
+  nextCurveID = (nextCurveID + 1) % MAX_CURVES;
 }
 void mouseDragged() {
-  myCurve[lastCurve].addPoint();
+  curves[nextCurveID].addPoint();
 }
 void drawBackground1() {
   background(0);
-  for (int i=0; i<400 * fadeOutState; i++) {
+  for (int i=0; i<400 * fadeOutOpacity; i++) {
     int x = int(random(width));
     int y = int(random(height));
     int p = x+y*width;
@@ -88,20 +125,27 @@ void drawBackground3() {
   fill(0, 150);
   rect(0, 0, width, height);
 }
-void sendData() {
+void talkToSC() {
   for (int i=0; i<MAX_CURVES; i++) {
-    int c = myCurve[i].getCurrColor();
-    if (c != 0) {
-      OscMessage myMessage = new OscMessage("/FS");
-      myMessage.add(i);
-      myMessage.add(int(hue(c))); 
-      myMessage.add(int(saturation(c))); 
-      myMessage.add(int(brightness(c))); 
-      myMessage.add(int(alpha(c))); 
-      oscP5.send(myMessage, toSendto);
+    int c = curves[i].getCurrColor();
+    // Play notes half of the time.
+    // Maybe it's better to send them always
+    // and let SC decide when to play.
+    // In any case it's better not to play all nates,
+    // to allow rythms and silence to exist.
+    if (c != 0 && random(1) > 0.5) {
+      OscMessage msg = new OscMessage("/FS");
+      msg.add(i);
+      msg.add(int(hue(c))); 
+      msg.add(int(saturation(c))); 
+      msg.add(int(brightness(c))); 
+      msg.add(int(alpha(c))); 
+      osc.send(msg, scLangAddr);
     }
   }
 }
 void keyPressed() {
-  fadeOut = true;
+  if(key == 'e') {
+    fadeOutActive = true;
+  }
 }
